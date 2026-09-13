@@ -4,6 +4,13 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
+import pgvector
+
+def render_item(type_, obj, autogen_context):
+    if type_ == "type" and isinstance(obj, pgvector.sqlalchemy.Vector):
+        autogen_context.imports.add("import pgvector")
+        return f"pgvector.sqlalchemy.Vector({obj.dim})"
+    return False
 
 # Import settings and Base model
 from app.core.config import settings
