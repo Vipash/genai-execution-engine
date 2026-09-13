@@ -1,5 +1,5 @@
 """
-Redis Streams Consumer Group Worker with Heartbeats and Self-PEL Drain.
+Redis Streams Consumer Group Worker with Distributed Auto-Claim and Checkpoint Resumption.
 """
 import asyncio
 import json
@@ -21,6 +21,7 @@ logger = structlog.get_logger(__name__)
 
 STREAM_NAME = "jobs:stream"
 GROUP_NAME = "job_workers"
+DLQ_STREAM = "jobs:dlq"
 
 class StreamWorker:
     def __init__(self, consumer_id: str | None = None):
@@ -42,26 +43,40 @@ class StreamWorker:
         redis = get_redis()
         await self.init_consumer_group(redis)
 
-        # 1. Start background Heartbeat task
-        heartbeat = HeartbeatService(redis, self.consumer_id)
+        heartbeat = HeartbeatService(redis, self.consumer_id, interval=5, ttl=15)
         heartbeat_task = asyncio.create_task(heartbeat.run(self.stop_event))
 
         try:
             while not self.stop_event.is_set():
                 try:
-                    # First priority: Drain any pending messages previously assigned to this worker ('0')
-                    pending_streams = await redis.xreadgroup(
+                    messages_to_process = []
+
+                    # 1. Drain own unacknowledged PEL messages
+                    pending = await redis.xreadgroup(
                         groupname=GROUP_NAME,
                         consumername=self.consumer_id,
                         streams={STREAM_NAME: "0"},
                         count=1
                     )
-                    
-                    messages_to_process = []
-                    if pending_streams and pending_streams[0][1]:
-                        messages_to_process = pending_streams[0][1]
-                    else:
-                        # Second priority: Read new incoming messages ('>')
+                    if pending and pending[0][1]:
+                        messages_to_process = pending[0][1]
+
+                    # 2. If nothing pending locally, auto-claim messages abandoned by dead workers (>8s idle)
+                    if not messages_to_process:
+                        claim_res = await redis.xautoclaim(
+                            name=STREAM_NAME,
+                            groupname=GROUP_NAME,
+                            consumername=self.consumer_id,
+                            min_idle_time=8000,
+                            start_id="0-0",
+                            count=1
+                        )
+                        if claim_res and len(claim_res) >= 2 and claim_res[1]:
+                            messages_to_process = claim_res[1]
+                            logger.warn("worker.claimed_abandoned_task", count=len(messages_to_process))
+
+                    # 3. If still nothing, read new messages with block
+                    if not messages_to_process:
                         streams = await redis.xreadgroup(
                             groupname=GROUP_NAME,
                             consumername=self.consumer_id,
@@ -72,6 +87,7 @@ class StreamWorker:
                         if streams and streams[0][1]:
                             messages_to_process = streams[0][1]
 
+                    # Process retrieved tasks
                     for msg_id, raw_data in messages_to_process:
                         await self._process_message(redis, msg_id, raw_data)
 
@@ -100,19 +116,35 @@ class StreamWorker:
             return
 
         job_uuid = uuid.UUID(job_id_str)
-        logger.info("worker.job_claimed", job_id=job_id_str, msg_id=msg_id)
+        
+        # Check delivery attempts for poison pill protection
+        pending_info = await redis.xpending_range(
+            name=STREAM_NAME, groupname=GROUP_NAME, min=msg_id, max=msg_id, count=1
+        )
+        delivery_count = pending_info[0].get("times_delivered", 1) if pending_info else 1
+
+        if delivery_count > settings.JOB_MAX_RETRIES:
+            logger.error("worker.poison_pill_detected", job_id=job_id_str, deliveries=delivery_count)
+            await redis.xadd(DLQ_STREAM, {"original_id": msg_id, "job_id": job_id_str, "payload": payload_json})
+            await redis.xack(STREAM_NAME, GROUP_NAME, msg_id)
+            async with async_session_factory() as session:
+                stmt = select(Job).where(Job.id == job_uuid)
+                res = await session.execute(stmt)
+                j = res.scalar_one_or_none()
+                if j:
+                    j.status = "dead_lettered"
+                    j.error_message = f"Exceeded max attempts ({delivery_count})"
+                    await session.commit()
+            return
+
+        logger.info("worker.job_claimed", job_id=job_id_str, msg_id=msg_id, attempt=delivery_count)
 
         async with async_session_factory() as session:
             stmt = select(Job).where(Job.id == job_uuid)
             res = await session.execute(stmt)
             job = res.scalar_one_or_none()
 
-            if not job:
-                logger.warn("worker.job_not_found", job_id=job_id_str)
-                await redis.xack(STREAM_NAME, GROUP_NAME, msg_id)
-                return
-
-            if job.status in ("succeeded", "failed", "dead_lettered"):
+            if not job or job.status in ("succeeded", "dead_lettered"):
                 await redis.xack(STREAM_NAME, GROUP_NAME, msg_id)
                 return
 
