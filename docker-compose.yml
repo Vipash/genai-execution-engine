@@ -1,6 +1,7 @@
 services:
   postgres:
-    image: pgvector/pgvector:0.8.0-pg16
+    image: pgvector/pgvector:pg16
+    platform: linux/amd64
     container_name: genai_postgres
     environment:
       POSTGRES_USER: postgres
@@ -29,6 +30,48 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  migration:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgrespassword@postgres:5432/genai_engine
+      REDIS_URL: redis://redis:6379/0
+    command: alembic upgrade head
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build: .
+    container_name: genai_api
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql+asyncpg://postgres:postgrespassword@postgres:5432/genai_engine
+      REDIS_URL: redis://redis:6379/0
+      PORT: 8000
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: python run_worker.py
+    environment:
+      PYTHONUNBUFFERED: "1"
+      APP_ENV: production
+      DATABASE_URL: postgresql+asyncpg://postgres:postgrespassword@postgres:5432/genai_engine
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      api:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
 
 volumes:
   pgdata:
