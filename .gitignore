@@ -1,13 +1,19 @@
+# Environments
+.venv/
+venv/
+ENV/
+
+# Environment Variables / Secrets
+.env
+
+# Python cache & artifacts
 __pycache__/
 *.py[cod]
 *$py.class
-.env
-.venv/
-env/
-venv/
-*.log
 .pytest_cache/
 .coverage
-htmlcov/
-dist/
-build/
+*.log
+
+# IDEs
+.vscode/
+.idea/
