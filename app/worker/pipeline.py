@@ -2,12 +2,14 @@
 GenAI Pipeline Executor with Checkpointed Step Resumption.
 """
 import asyncio
+import time
 from datetime import datetime, timezone
 from typing import Any
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.job import Job, WorkflowStep
+from app.core.metrics import STEP_DURATION
 
 logger = structlog.get_logger(__name__)
 
@@ -54,7 +56,12 @@ class WorkflowPipeline:
                 continue
 
             logger.info("pipeline.step_started", job_id=str(job.id), step=step_name)
+            
+            # Instrument step execution latency
+            start_time = time.perf_counter()
             step_output = await self._run_step(step_name, job.payload, intermediate_state)
+            duration = time.perf_counter() - start_time
+            STEP_DURATION.labels(step_name=step_name).observe(duration)
             
             # Checkpoint the successful step in PostgreSQL
             step_record = WorkflowStep(

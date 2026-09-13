@@ -11,6 +11,7 @@ from app.models.job import Job
 from app.models.outbox import OutboxEvent
 from app.schemas.job import JobCreateRequest, JobResponse
 from app.services.idempotency import IdempotencyService
+from app.core.metrics import IDEMPOTENCY_HITS, JOBS_SUBMITTED
 
 router = APIRouter()
 
@@ -33,6 +34,7 @@ async def submit_job(
         )
 
     if action == "EXISTING":
+        IDEMPOTENCY_HITS.labels(action="cached_result").inc()
         stmt = (
             select(Job)
             .where(Job.id == existing_job_id)
@@ -72,6 +74,7 @@ async def submit_job(
         # Finalize idempotency state in Redis
         await idempotency_svc.finalize(x_idempotency_key, new_job.id)
         
+        JOBS_SUBMITTED.labels(workflow_type=new_job.workflow_type).inc()
         return new_job
 
     except Exception:

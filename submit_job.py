@@ -29,4 +29,3 @@ def submit(key: str | None = None):
 if __name__ == "__main__":
     test_key = sys.argv[1] if len(sys.argv) > 1 else None
     submit(test_key)
-    
