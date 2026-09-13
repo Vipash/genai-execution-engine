@@ -103,20 +103,35 @@ class StreamWorker:
             await redis.aclose()
             logger.info("worker.stopped", consumer_id=self.consumer_id)
 
-    async def _process_message(self, redis: Redis, msg_id: str, raw_data: dict[str, str]) -> None:
-        payload_json = raw_data.get("payload")
-        if not payload_json:
-            await redis.xack(STREAM_NAME, GROUP_NAME, msg_id)
-            return
+    async def _process_message(self, redis: Redis, msg_id: str, raw_data: dict) -> None:
+        # Normalize dictionary keys/values to string to prevent bytes vs str lookup mismatch
+        normalized_data = {
+            (k.decode("utf-8") if isinstance(k, bytes) else k): 
+            (v.decode("utf-8") if isinstance(v, bytes) else v) 
+            for k, v in raw_data.items()
+        }
 
-        data = json.loads(payload_json)
-        job_id_str = data.get("job_id")
+        job_id_str = normalized_data.get("job_id")
         if not job_id_str:
+            logger.warning("worker.malformed_message_missing_job_id", msg_id=msg_id, raw_data=normalized_data)
             await redis.xack(STREAM_NAME, GROUP_NAME, msg_id)
             return
 
-        job_uuid = uuid.UUID(job_id_str)
-        
+        try:
+            job_uuid = uuid.UUID(job_id_str)
+        except ValueError:
+            logger.warning("worker.invalid_job_id_format", msg_id=msg_id, job_id=job_id_str)
+            await redis.xack(STREAM_NAME, GROUP_NAME, msg_id)
+            return
+
+        payload_json = normalized_data.get("payload", "{}")
+        try:
+            data = json.loads(payload_json) if payload_json else {}
+        except json.JSONDecodeError as jde:
+            logger.warning("worker.payload_json_decode_error", msg_id=msg_id, error=str(jde), payload=payload_json)
+            await redis.xack(STREAM_NAME, GROUP_NAME, msg_id)
+            return
+
         # Check delivery attempts for poison pill protection
         pending_info = await redis.xpending_range(
             name=STREAM_NAME, groupname=GROUP_NAME, min=msg_id, max=msg_id, count=1
@@ -145,6 +160,7 @@ class StreamWorker:
             job = res.scalar_one_or_none()
 
             if not job or job.status in ("succeeded", "dead_lettered"):
+                logger.warning("worker.job_already_terminal_or_missing", job_id=job_id_str, status=getattr(job, "status", "not_found"))
                 await redis.xack(STREAM_NAME, GROUP_NAME, msg_id)
                 return
 
