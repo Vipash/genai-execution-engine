@@ -43,7 +43,7 @@ async def metrics():
         length = await redis.xlen("jobs:stream")
         QUEUE_DEPTH.labels(stream_name="jobs:stream").set(length)
         await redis.aclose()
-    except Exception: # noqa: BLE001
+    except Exception:
         pass
 
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)

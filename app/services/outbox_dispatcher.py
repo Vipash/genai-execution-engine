@@ -4,7 +4,7 @@ Transactional Outbox Dispatcher with Anti-Entropy State Reconciliation.
 
 import asyncio
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from sqlalchemy import select
@@ -49,7 +49,7 @@ class OutboxDispatcher:
                         await asyncio.wait_for(
                             stop_event.wait(), timeout=self.poll_interval
                         )
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         pass
         finally:
             await redis_client.aclose()
@@ -88,7 +88,7 @@ class OutboxDispatcher:
                 await session.commit()
                 return len(events)
 
-            except Exception as exc: # noqa: BLE001
+            except Exception as exc:
                 await session.rollback()
                 logger.error("outbox_dispatcher.dispatch_error", error=str(exc))
                 return 0
@@ -101,7 +101,7 @@ class OutboxDispatcher:
         """
         async with async_session_factory() as session:
             try:
-                stale_threshold = datetime.now(timezone.utc) - timedelta(minutes=3)
+                stale_threshold = datetime.now(UTC) - timedelta(minutes=3)
 
                 # 1. Identify stale queued jobs
                 stmt = (

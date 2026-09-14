@@ -26,7 +26,7 @@ class HeartbeatService:
                 await self.redis.set(self._key, "active", ex=self.ttl)
                 try:
                     await asyncio.wait_for(stop_event.wait(), timeout=self.interval)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     pass
         finally:
             # Clean up on graceful exit

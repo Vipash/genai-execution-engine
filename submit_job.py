@@ -21,7 +21,7 @@ def submit(key: str | None = None):
         response = httpx.post(url, json=payload, headers=headers, timeout=5.0)
         print(f"\n[Status {response.status_code}]")
         print(response.json())
-    except Exception as e: # noqa: BLE001
+    except Exception as e:
         print(f"Failed to submit: {e}")
 
 

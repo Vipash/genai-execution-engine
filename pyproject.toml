@@ -1,0 +1,7 @@
+[tool.ruff]
+# Set target Python version
+target-version = "py311"
+
+[tool.ruff.lint]
+# Ignore FastAPI dependency injection warnings, broad exception catches, and pass-in-except blocks
+ignore = ["B008", "BLE001", "S110"]

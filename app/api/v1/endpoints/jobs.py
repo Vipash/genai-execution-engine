@@ -23,9 +23,9 @@ async def submit_job(
     request: JobCreateRequest,
     x_idempotency_key: str = Header(
         alias="X-Idempotency-Key", description="Client idempotency key UUID"
-    ), # noqa: B008
-    db: AsyncSession = Depends(get_db), # noqa: B008
-    redis: Redis = Depends(get_redis), # noqa: B008
+    ),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ):
     idempotency_svc = IdempotencyService(redis, db)
 

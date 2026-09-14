@@ -6,7 +6,7 @@ import asyncio
 import json
 import socket
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import structlog
 from redis.asyncio import Redis
@@ -108,7 +108,7 @@ class StreamWorker:
 
                 except asyncio.CancelledError:
                     break
-                except Exception as exc: # noqa: BLE001
+                except Exception as exc:
                     logger.error("worker.loop_error", error=str(exc))
                     await asyncio.sleep(1)
 
@@ -227,7 +227,7 @@ class StreamWorker:
 
             job.status = "running"
             if not job.started_at:
-                job.started_at = datetime.now(timezone.utc)
+                job.started_at = datetime.now(UTC)
 
             # Record attempt
             attempt_stmt = select(JobAttempt).where(JobAttempt.job_id == job.id)
@@ -249,7 +249,7 @@ class StreamWorker:
                 result_state = await pipeline.execute(job)
 
                 job.status = "succeeded"
-                job.completed_at = datetime.now(timezone.utc)
+                job.completed_at = datetime.now(UTC)
                 job.result = result_state
                 attempt.status = "succeeded"
 

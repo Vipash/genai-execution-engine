@@ -33,7 +33,7 @@ async def send_job(
             "latency": latency,
             "success": resp.status_code == 202,
         }
-    except Exception as e: # noqa: BLE001
+    except Exception as e:
         return {"status_code": 0, "latency": 0, "success": False, "error": str(e)}
 
 

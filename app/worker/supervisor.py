@@ -42,7 +42,7 @@ class RecoverySupervisor:
                     await asyncio.wait_for(
                         self.stop_event.wait(), timeout=self.check_interval
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     pass
         finally:
             await redis.aclose()
@@ -74,7 +74,7 @@ class RecoverySupervisor:
             for msg_id, raw_fields in messages:
                 await self._triage_orphaned_message(redis, msg_id, raw_fields)
 
-        except Exception as exc: # noqa: BLE001
+        except Exception as exc:
             logger.error("supervisor.recovery_cycle_error", error=str(exc))
 
     async def _triage_orphaned_message(
