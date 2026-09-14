@@ -111,7 +111,21 @@ class StreamWorker:
             for k, v in raw_data.items()
         }
 
-        job_id_str = normalized_data.get("job_id")
+        payload_json = normalized_data.get("payload")
+        if not payload_json:
+            logger.warning("worker.malformed_message_missing_payload", msg_id=msg_id, raw_data=normalized_data)
+            await redis.xack(STREAM_NAME, GROUP_NAME, msg_id)
+            return
+
+        try:
+            data = json.loads(payload_json) if isinstance(payload_json, str) else payload_json
+        except json.JSONDecodeError as jde:
+            logger.warning("worker.payload_json_decode_error", msg_id=msg_id, error=str(jde), payload=payload_json)
+            await redis.xack(STREAM_NAME, GROUP_NAME, msg_id)
+            return
+
+        # Extract job_id from inner payload JSON (with fallback to top-level stream field)
+        job_id_str = (data.get("job_id") if isinstance(data, dict) else None) or normalized_data.get("job_id")
         if not job_id_str:
             logger.warning("worker.malformed_message_missing_job_id", msg_id=msg_id, raw_data=normalized_data)
             await redis.xack(STREAM_NAME, GROUP_NAME, msg_id)
@@ -121,14 +135,6 @@ class StreamWorker:
             job_uuid = uuid.UUID(job_id_str)
         except ValueError:
             logger.warning("worker.invalid_job_id_format", msg_id=msg_id, job_id=job_id_str)
-            await redis.xack(STREAM_NAME, GROUP_NAME, msg_id)
-            return
-
-        payload_json = normalized_data.get("payload", "{}")
-        try:
-            data = json.loads(payload_json) if payload_json else {}
-        except json.JSONDecodeError as jde:
-            logger.warning("worker.payload_json_decode_error", msg_id=msg_id, error=str(jde), payload=payload_json)
             await redis.xack(STREAM_NAME, GROUP_NAME, msg_id)
             return
 
