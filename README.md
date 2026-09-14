@@ -39,8 +39,6 @@ Engineered to guarantee **zero duplicate inferences** under high-concurrency bur
 * **Native `pgvector` Integration:** Generates 1536-dimensional normalized float vectors, materializes them in a PostgreSQL vector store, and exposes sub-millisecond Cosine Distance (`<=>`) vector similarity search endpoints.
 * **OpenMetrics Telemetry:** Exposes an OpenMetrics scrape endpoint (`/metrics`) recording real-time queue depth gauges, step execution duration histograms, worker counts, and idempotency collision rates.
 
-![Worker Logs Execution Success](docs/assets/worker-execution-success.png)
-
 ---
 
 ## System Topology
@@ -63,7 +61,7 @@ flowchart TD
     Stream -->|XAUTOCLAIM min_idle=8s| Worker2["Worker Node 2 (Failover)"]
 
     Worker1 -.->|Crash mid-flight| Worker2
-    Worker1 -->|Checkpoints Steps 1 & 2| PG[("PostgreSQL 16 + pgvector")]
+    Worker1 -->|Checkpoints Steps 1 and 2| PG[("PostgreSQL 16 + pgvector")]
     Worker2 -->|Reads Checkpoints, Resumes Step 3| PG
     Worker2 -->|XACK| Stream
     Gateway -.->|Scrapes /metrics| Prometheus["Prometheus Collector"]
@@ -77,21 +75,21 @@ flowchart TD
 stateDiagram-v2
     [*] --> QUEUED: Job Created + Outbox Event Committed
     QUEUED --> RUNNING: Worker claims via XREADGROUP (Attempt 1)
-    
+
     state RUNNING {
         [*] --> Step1_Parsing: Execute & Checkpoint
         Step1_Parsing --> Step2_Embedding: Execute & Checkpoint
         Step2_Embedding --> Step3_Indexing: Execute & Persist pgvector
         Step3_Indexing --> [*]
     }
-    
+
     RUNNING --> WORKER_CRASH: Process killed (OOM / SIGKILL)
     WORKER_CRASH --> RECLAIMED: Idle > 8s detected via XAUTOCLAIM
     RECLAIMED --> RUNNING: Skip completed steps, resume at failure point (Attempt 2)
-    
+
     RUNNING --> SUCCEEDED: All steps complete + XACK
     RUNNING --> DEAD_LETTERED: Attempts > MAX_RETRIES (3) -> Route to jobs:dlq
-    
+
     SUCCEEDED --> [*]
     DEAD_LETTERED --> [*]
 ```
@@ -135,6 +133,9 @@ All runtime behavior is controlled via environment variables and distributed sys
 | `DEBUG` | `true` | Enables SQLAlchemy SQL echo logging |
 | `WORKER_CONCURRENCY` | `5` | In-flight async task limit per worker process |
 | `JOB_MAX_RETRIES` | `3` | Max delivery attempts before moving a task to `jobs:dlq` |
+| `OPENAI_API_KEY` | *(required, no default)* | Credential used by the embedding stage to call `text-embedding-3-small`. The pipeline's Embed step will fail without this set. |
+
+> **Note:** if the embedding stage is backed by a different provider or a local model in your setup, update this row and the "Native `pgvector` Integration" description above accordingly — both should name the actual embedding source in use.
 
 ### Architectural Timing Invariants
 | Mechanism | Invariant Value | Operational Purpose |
@@ -180,19 +181,33 @@ curl -X POST "http://localhost:8000/v1/jobs/" \
 ```
 ![Job Submission Success via Swagger UI](docs/assets/job-submission-success.png)
 
-### 3. Query Vector Similarity
-Query closest semantic document chunks via Cosine Distance (`<=>`) in PostgreSQL:
+### 3. Verify Database Schema
+Confirm all Alembic migrations executed successfully by checking the database tables via `psql`:
+
+![Database Schema Verification](docs/assets/db-schema-verification.png)
+
+### 4. Verify Job Execution & Results
+Check the worker logs to confirm the job was claimed, processed step-by-step, and completed:
+
+![Worker Logs Execution Success](docs/assets/worker-execution-success.png)
+
+Then check the job's status, parsed chunks, and generated vector embeddings (`text-embedding-3-small`, 1536 dimensions) via the Swagger UI at `http://localhost:8000/docs`, or by fetching `GET /v1/jobs/{id}` directly:
+
+![Job Result Verification](docs/assets/job-result-success.png)
+
+### 5. Query Vector Similarity
+Query the closest semantic document chunks via Cosine Distance (`<=>`) in PostgreSQL:
 ```bash
 curl "http://localhost:8000/v1/jobs/<JOB_UUID>/similar-chunks?chunk_index=0"
 ```
 
-### 4. Execute Load & Stress Test
+### 6. Execute Load & Stress Test
 Trigger the 100-request concurrent load generator inside the gateway container:
 ```bash
 docker exec -it genai_api python benchmark.py
 ```
 
-### 5. Running Automated Integration Tests
+### 7. Running Automated Integration Tests
 Run the test suite locally against test containers:
 ```bash
 pytest -v
@@ -243,24 +258,6 @@ pytest -v
 
 ---
 
-## 🔍 Verification & Testing
-
-Once you have your containers up and running, you can verify both the database setup and the API workflow execution.
-
-### 1. Database Schema Verification
-Verify that all Alembic migrations have executed successfully by checking the database tables via `psql`:
-
-![Database Schema Verification](docs/assets/db-schema-verification.png)
-
----
-
-### 2. Verifying Job Execution & Results
-After submitting a document ingestion job, you can check its status, parsed chunks, and generated vector embeddings (`text-embedding-3-small`, 1536 dimensions) using the Swagger UI at `http://localhost:8000/docs`:
-
-![Job Result Verification](docs/assets/job-result-success.png)
-
----
-
 ## Repository Structure
 
 ```text
@@ -282,10 +279,10 @@ genai-execution-engine/
 │   │   ├── idempotency.py       # Distributed multi-tier idempotency service
 │   │   └── outbox_dispatcher.py # Outbox publisher with Anti-Entropy sweep loop
 │   └── worker/
-│       ├── consumer.py          # Consumer group worker with self-PEL drain
+│       ├── consumer.py          # Consumer group worker: XREADGROUP, XAUTOCLAIM, DLQ routing, and checkpoint resumption
 │       ├── heartbeat.py         # Ephemeral Redis TTL worker heartbeats
 │       ├── pipeline.py          # Checkpointed GenAI pipeline & pgvector store
-│       └── supervisor.py        # XAUTOCLAIM recovery engine & DLQ router
+│       └── supervisor.py        # (verify role against consumer.py before publishing — see note below)
 ├── tests/                       # Pytest asynchronous integration test suite
 ├── benchmark.py                 # High-concurrency load testing engine
 ├── submit_job.py                # Cross-platform CLI job dispatcher
