@@ -2,11 +2,14 @@
 Worker Heartbeat Service.
 Maintains ephemeral TTL keys in Redis indicating consumer liveness.
 """
+
 import asyncio
+
 import structlog
 from redis.asyncio import Redis
 
 logger = structlog.get_logger(__name__)
+
 
 class HeartbeatService:
     def __init__(self, redis: Redis, worker_id: str, interval: int = 5, ttl: int = 15):

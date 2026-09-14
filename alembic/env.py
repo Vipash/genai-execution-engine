@@ -1,10 +1,13 @@
 import asyncio
 from logging.config import fileConfig
+
+import pgvector
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
+
 from alembic import context
-import pgvector
+
 
 def render_item(type_, obj, autogen_context):
     if type_ == "type" and isinstance(obj, pgvector.sqlalchemy.Vector):
@@ -12,13 +15,11 @@ def render_item(type_, obj, autogen_context):
         return f"pgvector.sqlalchemy.Vector({obj.dim})"
     return False
 
+
 # Import settings and Base model
+# Import model modules so SQLAlchemy's Base metadata registers them
 from app.core.config import settings
 from app.models.base import Base
-
-# Import model modules so SQLAlchemy's Base metadata registers them
-import app.models.job
-import app.models.outbox
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)

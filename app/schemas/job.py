@@ -1,11 +1,16 @@
 from datetime import datetime
 from typing import Any
 from uuid import UUID
+
 from pydantic import BaseModel, ConfigDict, Field
+
 
 class JobCreateRequest(BaseModel):
     workflow_type: str = Field(..., description="Target pipeline: 'document_ingestion'")
-    payload: dict[str, Any] = Field(..., description="Input parameters e.g., document URL or raw text")
+    payload: dict[str, Any] = Field(
+        ..., description="Input parameters e.g., document URL or raw text"
+    )
+
 
 class WorkflowStepResponse(BaseModel):
     step_name: str
@@ -14,6 +19,7 @@ class WorkflowStepResponse(BaseModel):
     output: dict[str, Any] | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
 
 class JobResponse(BaseModel):
     id: UUID

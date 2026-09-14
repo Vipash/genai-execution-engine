@@ -1,6 +1,13 @@
 from app.models.base import Base
+from app.models.embedding import DocumentEmbedding
 from app.models.job import Job, JobAttempt, WorkflowStep
 from app.models.outbox import OutboxEvent
-from app.models.embedding import DocumentEmbedding
 
-__all__ = ["Base", "Job", "JobAttempt", "WorkflowStep", "OutboxEvent", "DocumentEmbedding"]
+__all__ = [
+    "Base",
+    "DocumentEmbedding",
+    "Job",
+    "JobAttempt",
+    "OutboxEvent",
+    "WorkflowStep",
+]

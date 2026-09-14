@@ -2,9 +2,11 @@
 Hardened Async Redis Client Connection Manager.
 Includes explicit socket timeouts, reconnect retries, and keep-alive healthchecks.
 """
+
 from redis.asyncio import ConnectionPool, Redis
 from redis.asyncio.retry import Retry
 from redis.backoff import ExponentialBackoff
+
 from app.core.config import settings
 
 # Configure automatic retry with exponential backoff on connection drops
@@ -19,8 +21,9 @@ pool = ConnectionPool.from_url(
     socket_connect_timeout=5.0,
     health_check_interval=15,  # Send PING every 15s to keep connection alive
     retry=retry_strategy,
-    retry_on_timeout=True
+    retry_on_timeout=True,
 )
+
 
 def get_redis() -> Redis:
     return Redis(connection_pool=pool)

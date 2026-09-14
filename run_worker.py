@@ -1,13 +1,17 @@
 """
 CLI runner for the Distributed Stream Worker.
 """
+
 import asyncio
 import signal
 import sys
+
 import structlog
+
 from app.worker.consumer import StreamWorker
 
 logger = structlog.get_logger(__name__)
+
 
 async def main():
     worker = StreamWorker()
@@ -31,6 +35,7 @@ async def main():
     except KeyboardInterrupt:
         logger.info("worker.keyboard_interrupt")
         shutdown()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

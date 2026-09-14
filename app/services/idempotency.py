@@ -2,13 +2,16 @@
 Distributed Idempotency Manager.
 Combines fast Redis key-value checks with PostgreSQL fallback.
 """
+
 import uuid
 from typing import Literal
+
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.job import Job
+
 
 class IdempotencyService:
     def __init__(self, redis: Redis, db: AsyncSession):
@@ -23,14 +26,14 @@ class IdempotencyService:
     ) -> tuple[Literal["NEW", "CONFLICT", "EXISTING"], uuid.UUID | None]:
         """
         Attempts to reserve an idempotency key.
-        
+
         Returns:
             - ("NEW", None): Key reserved successfully; proceed with creation.
             - ("CONFLICT", None): Another request with this key is currently in flight.
             - ("EXISTING", job_id): Request already completed; return existing job.
         """
         redis_key = self._redis_key(idempotency_key)
-        
+
         # 1. Fast path: Check Redis cache
         cached_val = await self.redis.get(redis_key)
         if cached_val:

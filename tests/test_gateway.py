@@ -1,12 +1,16 @@
 """
 End-to-End Integration Tests for API Gateway, Idempotency, and Outbox.
 """
+
 import uuid
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from redis.asyncio import Redis
-from app.main import app
+
 from app.core.config import settings
+from app.main import app
+
 
 @pytest.fixture
 async def async_client():
@@ -14,11 +18,13 @@ async def async_client():
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
 
+
 @pytest.fixture
 async def redis_client():
     client = Redis.from_url(settings.REDIS_URL, decode_responses=True)
     yield client
     await client.aclose()
+
 
 @pytest.mark.asyncio
 async def test_health_check(async_client: AsyncClient):
@@ -26,12 +32,15 @@ async def test_health_check(async_client: AsyncClient):
     assert response.status_code == 200
     assert response.json()["status"] == "healthy"
 
+
 @pytest.mark.asyncio
-async def test_job_submission_and_idempotency(async_client: AsyncClient, redis_client: Redis):
+async def test_job_submission_and_idempotency(
+    async_client: AsyncClient, redis_client: Redis
+):
     test_key = f"ci-test-{uuid.uuid4().hex[:8]}"
     payload = {
         "workflow_type": "document_ingestion",
-        "payload": {"document_url": "https://arxiv.org/pdf/sample"}
+        "payload": {"document_url": "https://arxiv.org/pdf/sample"},
     }
     headers = {"X-Idempotency-Key": test_key}
 
@@ -52,6 +61,7 @@ async def test_job_submission_and_idempotency(async_client: AsyncClient, redis_c
     # 3. Verify Redis idempotency cache was populated with 24h TTL
     cached_id = await redis_client.get(f"idempotency:{test_key}")
     assert cached_id == job_id
+
 
 @pytest.mark.asyncio
 async def test_metrics_endpoint(async_client: AsyncClient):

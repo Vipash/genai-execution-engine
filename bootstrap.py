@@ -2,7 +2,7 @@
 One-Shot Project Bootstrapper
 Distributed GenAI Workflow & Job Execution Platform
 """
-import os
+
 from pathlib import Path
 
 FILES = {
@@ -23,7 +23,6 @@ prometheus-client>=0.20.0
 pytest>=8.3.0
 pytest-asyncio>=0.23.8
 """,
-
     "docker-compose.yml": """services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -60,7 +59,6 @@ volumes:
   pgdata:
   redisdata:
 """,
-
     ".env.example": """APP_ENV=development
 APP_NAME=GenAI-Execution-Engine
 DEBUG=true
@@ -76,7 +74,6 @@ REDIS_URL=redis://localhost:6379/0
 WORKER_CONCURRENCY=5
 JOB_MAX_RETRIES=3
 """,
-
     ".env": """APP_ENV=development
 APP_NAME=GenAI-Execution-Engine
 DEBUG=true
@@ -88,7 +85,6 @@ REDIS_URL=redis://localhost:6379/0
 WORKER_CONCURRENCY=5
 JOB_MAX_RETRIES=3
 """,
-
     ".gitignore": """__pycache__/
 *.py[cod]
 *$py.class
@@ -103,13 +99,11 @@ htmlcov/
 dist/
 build/
 """,
-
     # -------------------------------------------------------------
     # APPLICATION CORE
     # -------------------------------------------------------------
     "app/__init__.py": "",
     "app/core/__init__.py": "",
-
     "app/core/config.py": """from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -128,7 +122,6 @@ class Settings(BaseSettings):
 
 settings = Settings()
 """,
-
     "app/core/db.py": """from collections.abc import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from app.core.config import settings
@@ -160,7 +153,6 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         finally:
             await session.close()
 """,
-
     "app/core/redis.py": """from redis.asyncio import ConnectionPool, Redis
 from app.core.config import settings
 
@@ -173,7 +165,6 @@ pool = ConnectionPool.from_url(
 def get_redis() -> Redis:
     return Redis(connection_pool=pool)
 """,
-
     # -------------------------------------------------------------
     # MODELS (SQLAlchemy 2.0 Mapped Syntax)
     # -------------------------------------------------------------
@@ -183,7 +174,6 @@ from app.models.outbox import OutboxEvent
 
 __all__ = ["Base", "Job", "JobAttempt", "WorkflowStep", "OutboxEvent"]
 """,
-
     "app/models/base.py": """from datetime import datetime, timezone
 from sqlalchemy import DateTime
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -204,7 +194,6 @@ class TimestampMixin:
         nullable=False
     )
 """,
-
     "app/models/job.py": """import uuid
 from datetime import datetime
 from typing import Any
@@ -268,7 +257,6 @@ class WorkflowStep(Base, TimestampMixin):
         Index("ix_workflow_steps_job_order", "job_id", "step_order", unique=True),
     )
 """,
-
     "app/models/outbox.py": """import uuid
 from typing import Any
 from sqlalchemy import String
@@ -285,12 +273,10 @@ class OutboxEvent(Base, TimestampMixin):
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="pending", index=True, nullable=False) # pending, published, failed
 """,
-
     # -------------------------------------------------------------
     # SCHEMAS (Pydantic v2)
     # -------------------------------------------------------------
     "app/schemas/__init__.py": "",
-
     "app/schemas/job.py": """from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -323,7 +309,6 @@ class JobResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 """,
-
     # -------------------------------------------------------------
     # API ENDPOINTS
     # -------------------------------------------------------------
@@ -335,7 +320,6 @@ from app.api.v1.endpoints import jobs
 api_router = APIRouter()
 api_router.include_router(jobs.router, prefix="/jobs", tags=["Jobs"])
 """,
-
     "app/api/v1/endpoints/__init__.py": "",
     "app/api/v1/endpoints/jobs.py": """from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -382,7 +366,6 @@ async def get_job_status(job_id: UUID, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Job not found")
     return job
 """,
-
     # -------------------------------------------------------------
     # ENTRYPOINT
     # -------------------------------------------------------------
@@ -408,8 +391,9 @@ app.include_router(api_router, prefix="/v1")
 @app.get("/health", tags=["Health"])
 async def health_check():
     return {"status": "healthy", "env": settings.APP_ENV}
-"""
+""",
 }
+
 
 def main():
     print("🚀 Initializing project skeleton...")
@@ -421,6 +405,7 @@ def main():
         print(f"  ✔ Created {file_path_str}")
 
     print("\n✅ Skeleton scaffolding completed successfully!")
+
 
 if __name__ == "__main__":
     main()

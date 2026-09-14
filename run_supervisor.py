@@ -1,9 +1,12 @@
 """
 CLI runner for the Outbox Dispatcher and Recovery & DLQ Supervisor.
 """
+
 import asyncio
 import signal
+
 import structlog
+
 from app.services.outbox_dispatcher import OutboxDispatcher
 from app.worker.supervisor import RecoverySupervisor
 
@@ -53,4 +56,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        pass    
+        pass

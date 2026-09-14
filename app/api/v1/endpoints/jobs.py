@@ -1,4 +1,5 @@
 from uuid import UUID
+
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from redis.asyncio import Redis
 from sqlalchemy import select
@@ -20,9 +21,11 @@ router = APIRouter()
 @router.post("/", response_model=JobResponse, status_code=status.HTTP_202_ACCEPTED)
 async def submit_job(
     request: JobCreateRequest,
-    x_idempotency_key: str = Header(alias="X-Idempotency-Key", description="Client idempotency key UUID"),
-    db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
+    x_idempotency_key: str = Header(
+        alias="X-Idempotency-Key", description="Client idempotency key UUID"
+    ), # noqa: B008
+    db: AsyncSession = Depends(get_db), # noqa: B008
+    redis: Redis = Depends(get_redis), # noqa: B008
 ):
     idempotency_svc = IdempotencyService(redis, db)
 
@@ -87,11 +90,7 @@ async def submit_job(
 
 @router.get("/{job_id}", response_model=JobResponse)
 async def get_job_status(job_id: UUID, db: AsyncSession = Depends(get_db)):
-    stmt = (
-        select(Job)
-        .where(Job.id == job_id)
-        .options(selectinload(Job.steps))
-    )
+    stmt = select(Job).where(Job.id == job_id).options(selectinload(Job.steps))
     result = await db.execute(stmt)
     job = result.scalar_one_or_none()
 
@@ -120,14 +119,18 @@ async def find_similar_chunks(
     ref_record = ref_res.scalar_one_or_none()
 
     if not ref_record:
-        raise HTTPException(status_code=404, detail="Target chunk or job embedding not found")
+        raise HTTPException(
+            status_code=404, detail="Target chunk or job embedding not found"
+        )
 
     # 2. Query closest embeddings using pgvector cosine distance
     similarity_stmt = (
         select(
             DocumentEmbedding.chunk_index,
             DocumentEmbedding.chunk_text,
-            DocumentEmbedding.embedding.cosine_distance(ref_record.embedding).label("distance"),
+            DocumentEmbedding.embedding.cosine_distance(ref_record.embedding).label(
+                "distance"
+            ),
         )
         .where(DocumentEmbedding.job_id == job_id)
         .order_by("distance")
