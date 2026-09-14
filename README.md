@@ -1,6 +1,6 @@
 # Distributed GenAI Workflow & Job Execution Platform
 
-[![CI Pipeline](https://github.com/yourusername/genai-execution-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/yourusername/genai-execution-engine/actions/workflows/ci.yml)
+[![CI Pipeline](https://github.com/yourusername/genai-execution-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/Vipash/genai-execution-engine/actions/workflows/ci.yml)
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![PostgreSQL 16](https://img.shields.io/badge/PostgreSQL-16%2Bpgvector-4169E1.svg?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
